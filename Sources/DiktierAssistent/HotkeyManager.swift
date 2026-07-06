@@ -6,10 +6,11 @@ import CoreGraphics
 /// fokussierten Anwendung landet. `NSEvent`-Monitore können Events nur
 /// beobachten, nicht schlucken - dafür wird ein `CGEventTap` benötigt.
 ///
-/// `fn` erzeugt nur `flagsChanged`-Events (keinen keyDown), deshalb wird der
-/// fn-Zustand separat mitgeführt und mit dem keyDown/keyUp von "t" kombiniert
-/// (push-to-talk: Start bei t-down während fn aktiv ist, Stop sobald t oder
-/// fn losgelassen wird).
+/// Ob `fn` gehalten wird, wird direkt am `.maskSecondaryFn`-Flag des
+/// jeweiligen Events geprüft statt an einem separat mitgeführten Zustand -
+/// so gibt es keine Race Condition zwischen dem flagsChanged-Event von fn
+/// und dem keyDown-Event von "t" (push-to-talk: Start bei t-down während fn
+/// aktiv ist, Stop sobald t oder fn losgelassen wird).
 ///
 /// Benötigt die Berechtigung "Eingabeüberwachung" (Input Monitoring), sonst
 /// kann der Event-Tap nicht erstellt werden bzw. liefert keine Events.
@@ -95,7 +96,10 @@ final class HotkeyManager {
             guard event.getIntegerValueField(.keyboardEventKeycode) == tKeyCode else {
                 return Unmanaged.passRetained(event)
             }
-            guard fnIsDown else { return Unmanaged.passRetained(event) }
+            guard event.flags.contains(.maskSecondaryFn) else {
+                return Unmanaged.passRetained(event)
+            }
+            fnIsDown = true
 
             let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
             if !isRepeat && !comboActive {

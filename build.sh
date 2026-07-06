@@ -17,8 +17,9 @@ mkdir -p "$APP_BUNDLE/Contents/Resources"
 cp "$BUILD_DIR/$EXECUTABLE_NAME" "$APP_BUNDLE/Contents/MacOS/$EXECUTABLE_NAME"
 cp Resources/Info.plist "$APP_BUNDLE/Contents/Info.plist"
 
-echo "Signiere App (ad-hoc)…"
-codesign --force --deep --sign - "$APP_BUNDLE"
+SIGN_IDENTITY="Diktier-Assistent Dev"
+echo "Signiere App (${SIGN_IDENTITY})…"
+codesign --force --deep --sign "$SIGN_IDENTITY" "$APP_BUNDLE"
 
 echo ""
 echo "Fertig: $APP_BUNDLE"

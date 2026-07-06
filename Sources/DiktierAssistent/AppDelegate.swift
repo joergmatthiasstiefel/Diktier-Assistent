@@ -123,6 +123,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 switch result {
                 case .success(let cleanedText):
                     self.deliver(cleanedText)
+                case .failure(.emptyTranscript):
+                    self.flash(symbol: "waveform.slash", tooltip: "Keine verständliche Sprache erkannt.")
                 case .failure(let error):
                     self.flash(symbol: "wifi.exclamationmark", tooltip: error.localizedDescription)
                 }

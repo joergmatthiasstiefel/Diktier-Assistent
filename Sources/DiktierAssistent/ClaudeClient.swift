@@ -2,6 +2,7 @@ import Foundation
 
 enum ClaudeClientError: Error, LocalizedError {
     case missingAPIKey
+    case emptyTranscript
     case network(Error)
     case badResponse(Int, String)
     case emptyContent
@@ -10,6 +11,8 @@ enum ClaudeClientError: Error, LocalizedError {
         switch self {
         case .missingAPIKey:
             return "Kein Anthropic API-Key hinterlegt. Bitte in den Einstellungen eintragen."
+        case .emptyTranscript:
+            return "Keine verständliche Sprache erkannt."
         case .network(let error):
             return "Keine Verbindung zur Claude API: \(error.localizedDescription)"
         case .badResponse(let code, let body):
@@ -37,6 +40,10 @@ final class ClaudeClient {
     func cleanUp(transcript: String, apiKey: String, completion: @escaping (Result<String, ClaudeClientError>) -> Void) {
         guard !apiKey.isEmpty else {
             completion(.failure(.missingAPIKey))
+            return
+        }
+        guard !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            completion(.failure(.emptyTranscript))
             return
         }
 
