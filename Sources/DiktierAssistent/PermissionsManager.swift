@@ -11,7 +11,7 @@ enum PermissionStatus {
 
 /// Bündelt Status-Abfragen und Anfragen für alle Berechtigungen, die die App
 /// benötigt: Mikrofon, Spracherkennung, Bedienungshilfen (für simuliertes
-/// Cmd+V) und Eingabeüberwachung (für den globalen fn+t-Hotkey).
+/// Cmd+V) und Eingabeüberwachung (für den globalen Control+1…4-Hotkey).
 final class PermissionsManager {
     static let shared = PermissionsManager()
 

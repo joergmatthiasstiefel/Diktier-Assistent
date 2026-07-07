@@ -49,9 +49,14 @@ struct SettingsView: View {
                     LoginItemManager.shared.setEnabled(newValue)
                 }
 
-            Text("Hotkey: fn + t gedrückt halten zum Aufnehmen, loslassen zum Beenden.")
+            Text("""
+            Hotkey: Control+1 (ohne Glättung), Control+2 (Glättung), \
+            Control+3 (freundlich) oder Control+4 (freundlich + Emoji) startet \
+            die Aufnahme, Esc beendet sie.
+            """)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(20)
         .frame(width: 400)

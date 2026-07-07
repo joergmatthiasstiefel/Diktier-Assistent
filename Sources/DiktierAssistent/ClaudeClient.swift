@@ -26,18 +26,9 @@ enum ClaudeClientError: Error, LocalizedError {
 /// Schickt das Rohtranskript an die Anthropic Messages API und bekommt einen
 /// geglätteten, ausformulierten Text zurück.
 final class ClaudeClient {
-    private let model = "claude-haiku-4-5-20251001"
     private let endpoint = URL(string: "https://api.anthropic.com/v1/messages")!
 
-    private let systemPrompt = """
-    Du bekommst ein rohes Sprache-zu-Text-Transkript auf Deutsch. Glätte es zu \
-    einem sauberen, ausformulierten Text: Entferne Füllwörter, Versprecher und \
-    Wiederholungen, korrigiere Grammatik und Zeichensetzung. Inhalt und \
-    Bedeutung dürfen sich nicht ändern. Gib ausschließlich den bereinigten Text \
-    zurück, ohne Anführungszeichen, Erklärungen oder Meta-Kommentare.
-    """
-
-    func cleanUp(transcript: String, apiKey: String, completion: @escaping (Result<String, ClaudeClientError>) -> Void) {
+    func cleanUp(transcript: String, apiKey: String, systemPrompt: String, model: String, completion: @escaping (Result<String, ClaudeClientError>) -> Void) {
         guard !apiKey.isEmpty else {
             completion(.failure(.missingAPIKey))
             return

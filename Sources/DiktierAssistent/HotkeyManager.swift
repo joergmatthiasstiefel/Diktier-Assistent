@@ -1,16 +1,18 @@
 import AppKit
 import CoreGraphics
 
-/// Erkennt die Tastenkombination fn + t systemweit und unterdrückt dabei das
-/// t-KeyDown/KeyUp, damit es nicht zusätzlich als Zeichen in der gerade
-/// fokussierten Anwendung landet. `NSEvent`-Monitore können Events nur
-/// beobachten, nicht schlucken - dafür wird ein `CGEventTap` benötigt.
+/// Erkennt systemweit Control+1…4 (Aufnahme starten, je nach Modus) und Esc
+/// (Aufnahme beenden). Anders als beim früheren fn+t-Push-to-Talk ist das
+/// hier ein Toggle: ein einzelner Tastendruck startet, Esc beendet - kein
+/// Halten nötig. `NSEvent`-Monitore können Events nur beobachten, nicht
+/// schlucken - dafür wird ein `CGEventTap` benötigt.
 ///
-/// Ob `fn` gehalten wird, wird direkt am `.maskSecondaryFn`-Flag des
-/// jeweiligen Events geprüft statt an einem separat mitgeführten Zustand -
-/// so gibt es keine Race Condition zwischen dem flagsChanged-Event von fn
-/// und dem keyDown-Event von "t" (push-to-talk: Start bei t-down während fn
-/// aktiv ist, Stop sobald t oder fn losgelassen wird).
+/// Esc wird nur geschluckt, solange eine Aufnahme läuft, damit das normale
+/// Esc-Verhalten in anderen Apps (Dialoge schließen etc.) sonst nicht
+/// beeinträchtigt wird. Wird während einer laufenden Aufnahme erneut eine
+/// Control+Ziffer-Kombination gedrückt, wird die Ziffer geschluckt (damit
+/// sie nicht im Text landet), aber der Moduswechsel ignoriert - dafür muss
+/// die laufende Aufnahme erst per Esc beendet werden.
 ///
 /// Benötigt die Berechtigung "Eingabeüberwachung" (Input Monitoring), sonst
 /// kann der Event-Tap nicht erstellt werden bzw. liefert keine Events.
@@ -18,13 +20,23 @@ final class HotkeyManager {
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
 
-    private var fnIsDown = false
-    private var comboActive = false
+    private var isRecording = false
+    /// Tastencodes, deren keyDown geschluckt wurde und deren zugehöriges
+    /// keyUp deshalb ebenfalls geschluckt werden muss.
+    private var suppressedKeyCodes = Set<Int64>()
 
-    /// kVK_ANSI_T
-    private let tKeyCode: Int64 = 17
+    /// kVK_Escape
+    private let escapeKeyCode: Int64 = 53
+    /// kVK_ANSI_1 … kVK_ANSI_4, jeweils dem Aufnahmemodus zugeordnet.
+    private let modeKeyCodes: [Int64: Int] = [
+        18: 1,
+        19: 2,
+        20: 3,
+        21: 4,
+    ]
 
-    var onStart: (() -> Void)?
+    /// Aufnahmemodus (1-4), siehe `RecordingMode`.
+    var onStart: ((Int) -> Void)?
     var onStop: (() -> Void)?
 
     func start() {
@@ -32,8 +44,7 @@ final class HotkeyManager {
 
         let eventMask: CGEventMask =
             (1 << CGEventType.keyDown.rawValue) |
-            (1 << CGEventType.keyUp.rawValue) |
-            (1 << CGEventType.flagsChanged.rawValue)
+            (1 << CGEventType.keyUp.rawValue)
 
         let selfPointer = Unmanaged.passUnretained(self).toOpaque()
 
@@ -68,8 +79,8 @@ final class HotkeyManager {
         }
         eventTap = nil
         runLoopSource = nil
-        fnIsDown = false
-        comboActive = false
+        isRecording = false
+        suppressedKeyCodes.removeAll()
     }
 
     /// Läuft auf dem Event-Tap-Thread (Hauptthread, da an CFRunLoopGetMain()
@@ -84,48 +95,46 @@ final class HotkeyManager {
             }
             return Unmanaged.passRetained(event)
 
-        case .flagsChanged:
-            let wasDown = fnIsDown
-            fnIsDown = event.flags.contains(.maskSecondaryFn)
-            if wasDown && !fnIsDown {
-                endComboIfNeeded()
+        case .keyDown:
+            let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+            let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+
+            if keyCode == escapeKeyCode {
+                if suppressedKeyCodes.contains(keyCode) {
+                    return nil // Wiederholung, während Esc gehalten wird
+                }
+                guard isRecording, !isRepeat else { return Unmanaged.passRetained(event) }
+                suppressedKeyCodes.insert(keyCode)
+                isRecording = false
+                let callback = onStop
+                DispatchQueue.main.async { callback?() }
+                return nil
             }
+
+            if let mode = modeKeyCodes[keyCode] {
+                guard event.flags.contains(.maskControl) else { return Unmanaged.passRetained(event) }
+                if !suppressedKeyCodes.contains(keyCode) {
+                    suppressedKeyCodes.insert(keyCode)
+                    if !isRecording && !isRepeat {
+                        isRecording = true
+                        let callback = onStart
+                        DispatchQueue.main.async { callback?(mode) }
+                    }
+                }
+                return nil // Ziffer schlucken, egal ob Start ausgelöst oder ignoriert
+            }
+
             return Unmanaged.passRetained(event)
 
-        case .keyDown:
-            guard event.getIntegerValueField(.keyboardEventKeycode) == tKeyCode else {
-                return Unmanaged.passRetained(event)
-            }
-            guard event.flags.contains(.maskSecondaryFn) else {
-                return Unmanaged.passRetained(event)
-            }
-            fnIsDown = true
-
-            let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
-            if !isRepeat && !comboActive {
-                comboActive = true
-                let callback = onStart
-                DispatchQueue.main.async { callback?() }
-            }
-            return nil // "t" schlucken, solange fn gehalten wird
-
         case .keyUp:
-            guard event.getIntegerValueField(.keyboardEventKeycode) == tKeyCode else {
-                return Unmanaged.passRetained(event)
+            let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+            if suppressedKeyCodes.remove(keyCode) != nil {
+                return nil
             }
-            let wasComboActive = comboActive
-            endComboIfNeeded()
-            return wasComboActive ? nil : Unmanaged.passRetained(event)
+            return Unmanaged.passRetained(event)
 
         default:
             return Unmanaged.passRetained(event)
         }
-    }
-
-    private func endComboIfNeeded() {
-        guard comboActive else { return }
-        comboActive = false
-        let callback = onStop
-        DispatchQueue.main.async { callback?() }
     }
 }

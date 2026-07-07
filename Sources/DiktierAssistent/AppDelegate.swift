@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let claudeClient = ClaudeClient()
     private let textInserter = TextInserter()
     private let permissionsState = PermissionsState()
+    private let recordingIndicator = RecordingIndicatorWindow()
     private var settingsWindowController: SettingsWindowController?
 
     private enum State {
@@ -16,6 +17,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var state: State = .idle {
         didSet { updateIcon() }
     }
+
+    /// Modus der gerade laufenden bzw. zuletzt gestarteten Aufnahme.
+    private var activeMode: RecordingMode = .smooth
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusItem()
@@ -49,8 +53,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func setupHotkey() {
-        hotkeyManager.onStart = { [weak self] in self?.beginRecording() }
-        hotkeyManager.onStop = { [weak self] in self?.endRecording() }
+        hotkeyManager.onStart = { [weak self] mode in
+            DebugLog.write("HotkeyManager.onStart, mode=\(mode)")
+            self?.beginRecording(modeValue: mode)
+        }
+        hotkeyManager.onStop = { [weak self] in
+            DebugLog.write("HotkeyManager.onStop")
+            self?.endRecording()
+        }
         hotkeyManager.start()
     }
 
@@ -74,8 +84,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Recording flow
 
-    private func beginRecording() {
-        guard state == .idle else { return }
+    private func beginRecording(modeValue: Int) {
+        guard state == .idle, let mode = RecordingMode(rawValue: modeValue) else { return }
 
         let manager = PermissionsManager.shared
         guard manager.microphoneStatus() == .authorized, manager.speechRecognitionStatus() == .authorized else {
@@ -84,23 +94,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
+        activeMode = mode
         state = .recording
+        recordingIndicator.show(mode: mode)
         do {
             try transcriber.startRecording()
         } catch {
             state = .idle
+            recordingIndicator.hide()
             flash(symbol: "exclamationmark.triangle", tooltip: "Aufnahme konnte nicht gestartet werden: \(error)")
         }
     }
 
     private func endRecording() {
         guard state == .recording else { return }
+        DebugLog.write("endRecording() – Modus '\(activeMode.label)', rufe transcriber.stopRecording auf.")
         state = .processing
+        recordingIndicator.hide()
         transcriber.stopRecording { [weak self] result in
             guard let self else { return }
+            DebugLog.write("stopRecording-Completion erreicht, result=\(result)")
             switch result {
             case .success(let transcript):
-                self.cleanUpAndInsert(transcript)
+                self.cleanUpAndInsert(transcript, mode: self.activeMode)
             case .failure(let error):
                 self.state = .idle
                 self.handle(transcriberError: error)
@@ -108,15 +124,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func cleanUpAndInsert(_ transcript: String) {
+    private func cleanUpAndInsert(_ transcript: String, mode: RecordingMode) {
+        guard let systemPrompt = mode.claudeSystemPrompt else {
+            state = .idle
+            let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else {
+                flash(symbol: "waveform.slash", tooltip: "Keine verständliche Sprache erkannt.")
+                return
+            }
+            deliver(trimmed)
+            return
+        }
+
         guard let apiKey = KeychainStore.shared.loadAPIKey(), !apiKey.isEmpty else {
+            DebugLog.write("Kein API-Key im Schlüsselbund hinterlegt (Modus '\(mode.label)').")
             state = .idle
             flash(symbol: "key.slash", tooltip: "Kein API-Key hinterlegt. Bitte in den Einstellungen eintragen.")
             openSettings()
             return
         }
 
-        claudeClient.cleanUp(transcript: transcript, apiKey: apiKey) { [weak self] result in
+        claudeClient.cleanUp(transcript: transcript, apiKey: apiKey, systemPrompt: systemPrompt, model: mode.claudeModel) { [weak self] result in
             guard let self else { return }
             DispatchQueue.main.async {
                 self.state = .idle
@@ -124,8 +152,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 case .success(let cleanedText):
                     self.deliver(cleanedText)
                 case .failure(.emptyTranscript):
+                    DebugLog.write("Leeres Transkript beim Claude-Aufruf in Modus '\(mode.label)'.")
                     self.flash(symbol: "waveform.slash", tooltip: "Keine verständliche Sprache erkannt.")
                 case .failure(let error):
+                    DebugLog.write("Claude-Fehler in Modus '\(mode.label)': \(error.localizedDescription)")
                     self.flash(symbol: "wifi.exclamationmark", tooltip: error.localizedDescription)
                 }
             }
@@ -143,6 +173,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handle(transcriberError: SpeechTranscriber.TranscriberError) {
+        DebugLog.write("Transkriptionsfehler in Modus '\(activeMode.label)': \(transcriberError)")
         switch transcriberError {
         case .emptyResult:
             flash(symbol: "waveform.slash", tooltip: "Keine verständliche Sprache erkannt.")
@@ -163,11 +194,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .idle:
             button.image = NSImage(systemSymbolName: "mic", accessibilityDescription: "Bereit")
             button.contentTintColor = nil
-            button.toolTip = "Diktier-Assistent – fn + t halten zum Diktieren"
+            button.toolTip = "Diktier-Assistent – Control+1…4 zum Diktieren"
         case .recording:
             button.image = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "Aufnahme läuft")
-            button.contentTintColor = .systemRed
-            button.toolTip = "Aufnahme läuft…"
+            button.contentTintColor = activeMode.accentColor
+            button.toolTip = "Aufnahme läuft (\(activeMode.label)) – Esc zum Beenden"
         case .processing:
             button.image = NSImage(systemSymbolName: "hourglass", accessibilityDescription: "Verarbeite…")
             button.contentTintColor = .systemOrange

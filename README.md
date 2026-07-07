@@ -1,8 +1,8 @@
 # Diktier-Assistent
 
-Menüleisten-App für macOS: `fn + t` gedrückt halten, Deutsch sprechen,
-loslassen – der geglättete Text wird per Claude API ausformuliert und
-automatisch in die zuvor aktive App eingefügt.
+Menüleisten-App für macOS: Hotkey drücken, Deutsch sprechen, mit Esc beenden
+– der Text wird je nach gewähltem Modus unverändert oder per Claude API
+umformuliert und automatisch in die zuvor aktive App eingefügt.
 
 ## Bauen & starten
 
@@ -29,36 +29,54 @@ Danach `/Applications/Diktier-Assistent.app` starten.
    Eingabeüberwachung (für den globalen Hotkey) öffnet die App die
    passenden Systemeinstellungen-Seiten automatisch; Status ist in den
    Einstellungen der App sichtbar (grüner/roter Punkt).
-3. Deutsches Sprachpaket: Damit die On-Device-Erkennung funktioniert, muss
+3. Deutsches Sprachpaket: Damit die Spracherkennung funktioniert, muss
    unter Systemeinstellungen → Tastatur → Diktat "Deutsch" aktiviert bzw.
    heruntergeladen sein.
 
-## Wichtiger Hinweis zur fn-Taste
+## Hotkeys & Modi
 
-Manche Mac-Tastaturen lösen bei alleinigem, kurzem Druck der fn-Taste eine
-Systemfunktion aus (Emoji-Picker, Diktat oder Siri, je nach Einstellung).
-Das stört die Kombination `fn + t` in der Praxis nicht, weil dabei eine
-zweite Taste gedrückt wird – falls es doch zu Konflikten kommt, unter
-Systemeinstellungen → Tastatur → "Drücken der 🌐-Taste, um zu:" auf
-"Nichts tun" stellen.
+Control+1 bis Control+4 starten die Aufnahme im jeweiligen Modus (Toggle,
+kein Halten nötig), Esc beendet sie:
+
+| Hotkey     | Modus                | Verhalten |
+|------------|-----------------------|-----------|
+| Control+1  | Ohne Glättung          | Transkript wird unverändert eingefügt, kein Claude-Aufruf |
+| Control+2  | Glättung               | Füllwörter/Versprecher entfernt, Grammatik korrigiert |
+| Control+3  | Freundlich             | wie Glättung, zusätzlich sehr freundlicher Ton, Schimpfwörter werden ausnahmslos ersetzt |
+| Control+4  | Freundlich + Emoji     | wie Modus 3, zusätzlich sparsam platzierte Emojis |
+
+Während der Aufnahme zeigen Menüleisten-Icon (farbcodiert je Modus) und ein
+schwebendes Overlay am oberen Bildschirmrand an, dass aufgenommen wird und
+dass Esc sie beendet. Wird während einer laufenden Aufnahme eine andere
+Modus-Kombination gedrückt, wird sie geschluckt, aber ignoriert – ein
+Moduswechsel ist erst nach Esc möglich.
 
 ## Funktionsweise (kurz)
 
-- `HotkeyManager` verfolgt den fn-Zustand über `flagsChanged`-Events und
-  kombiniert ihn mit keyDown/keyUp von "t" (Push-to-talk, systemweit über
-  globale `NSEvent`-Monitore – daher die Berechtigung "Eingabeüberwachung").
-- `SpeechTranscriber` nimmt per `AVAudioEngine` auf und transkribiert
-  on-device über `SFSpeechRecognizer` (`de-DE`).
-- `ClaudeClient` schickt das Rohtranskript an die Anthropic Messages API
-  (Modell `claude-haiku-4-5-20251001`) mit der Anweisung, Füllwörter,
-  Versprecher und Grammatikfehler zu glätten, ohne den Inhalt zu ändern.
+- `HotkeyManager` erkennt Control+1…4 (Start) und Esc (Stopp) systemweit
+  über einen `CGEventTap` (daher die Berechtigung "Eingabeüberwachung").
+  Esc wird nur geschluckt, solange eine Aufnahme läuft, damit das normale
+  Esc-Verhalten in anderen Apps sonst unangetastet bleibt.
+- `SpeechTranscriber` nimmt per `AVAudioEngine` auf und transkribiert über
+  `SFSpeechRecognizer` (`de-DE`). Bevorzugt On-Device, erlaubt macOS aber
+  bei Bedarf den Ausweich auf die robustere serverbasierte Erkennung –
+  rein On-Device lieferte bei schneller/undeutlicher Sprache öfters ein
+  leeres Transkript.
+- `ClaudeClient` schickt das Rohtranskript an die Anthropic Messages API,
+  mit einem modusabhängigen System-Prompt und Modell (`RecordingMode.swift`):
+  Glättung läuft auf `claude-haiku-4-5-20251001`, die kreativeren
+  Freundlich-Modi auf `claude-sonnet-5`, um Grammatikfehler bei der
+  stärkeren Umformulierung zu vermeiden.
 - `TextInserter` schreibt das Ergebnis in die Zwischenablage und simuliert
   `Cmd+V` über `CGEvent` (Bedienungshilfen-Zugriff nötig). Ohne diesen
   Zugriff bleibt der Text nur in der Zwischenablage, die App weist per
   Icon-Hinweis darauf hin.
 - Fehlerfälle (keine Internetverbindung, fehlende Berechtigung, leere/
-  unverständliche Aufnahme) blinken kurz als gelbes Warn-Icon mit Tooltip
-  auf, statt still zu scheitern.
+  unverständliche Aufnahme, fehlender API-Key) blinken kurz als gelbes
+  Warn-Icon mit Tooltip auf, statt still zu scheitern, und werden
+  zusätzlich in `~/diktier-debug.log` protokolliert (`DebugLog.swift`) –
+  NSLog-Ausgaben dieser App waren über `log show`/`log stream` beim
+  Start über das App-Bundle nicht zuverlässig einsehbar.
 
 ## Nicht enthalten
 

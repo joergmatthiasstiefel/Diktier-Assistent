@@ -21,8 +21,8 @@
     <key>LSUIElement</key>
     <true/>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Diktier-Assistent benötigt Mikrofonzugriff, um deine Sprache aufzuzeichnen, solange du fn + t gedrückt hältst.</string>
+    <string>Diktier-Assistent benötigt Mikrofonzugriff, um deine Sprache aufzuzeichnen, solange die Aufnahme per Control+1…4 läuft.</string>
     <key>NSSpeechRecognitionUsageDescription</key>
-    <string>Diktier-Assistent nutzt die On-Device-Spracherkennung, um dein gesprochenes Deutsch in Text umzuwandeln.</string>
+    <string>Diktier-Assistent nutzt die Spracherkennung (bevorzugt on-device, bei Bedarf serverbasiert), um dein gesprochenes Deutsch in Text umzuwandeln.</string>
 </dict>
 </plist>

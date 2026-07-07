@@ -1,8 +1,11 @@
 import AVFoundation
 import Speech
 
-/// Nimmt Audio auf, solange die Taste gehalten wird, und transkribiert es
-/// on-device über SFSpeechRecognizer (de-DE).
+/// Nimmt Audio auf, solange die Taste gehalten wird, und transkribiert es über
+/// SFSpeechRecognizer (de-DE). Nutzt bevorzugt die On-Device-Erkennung,
+/// erlaubt macOS bei Bedarf aber den Ausweich auf die serverbasierte
+/// Erkennung - die ist bei schneller/undeutlicher Sprache deutlich robuster,
+/// das On-Device-Modell lieferte dafür sonst öfters ein leeres Transkript.
 final class SpeechTranscriber {
     enum TranscriberError: Error {
         case recognizerUnavailable
@@ -28,9 +31,6 @@ final class SpeechTranscriber {
 
         let req = SFSpeechAudioBufferRecognitionRequest()
         req.shouldReportPartialResults = true
-        if recognizer.supportsOnDeviceRecognition {
-            req.requiresOnDeviceRecognition = true
-        }
         request = req
 
         let inputNode = audioEngine.inputNode
