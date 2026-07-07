@@ -21,6 +21,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Modus der gerade laufenden bzw. zuletzt gestarteten Aufnahme.
     private var activeMode: RecordingMode = .smooth
 
+    /// Bleibt true, bis ein Claude-Aufruf wieder erfolgreich ist. Anders als
+    /// die übrigen Fehler (die nur 3 Sekunden aufblinken) ist das hier
+    /// dauerhaft sichtbar, weil man sonst leicht weiterdiktiert, ohne zu
+    /// merken, dass Modus 2-4 gar nicht mehr ankommen.
+    private var creditExhausted = false
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusItem()
         setupHotkey()
@@ -150,13 +156,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.state = .idle
                 switch result {
                 case .success(let cleanedText):
+                    self.creditExhausted = false
                     self.deliver(cleanedText)
                 case .failure(.emptyTranscript):
                     DebugLog.write("Leeres Transkript beim Claude-Aufruf in Modus '\(mode.label)'.")
                     self.flash(symbol: "waveform.slash", tooltip: "Keine verständliche Sprache erkannt.")
                 case .failure(let error):
                     DebugLog.write("Claude-Fehler in Modus '\(mode.label)': \(error.localizedDescription)")
-                    self.flash(symbol: "wifi.exclamationmark", tooltip: error.localizedDescription)
+                    if error.localizedDescription.lowercased().contains("credit balance") {
+                        self.creditExhausted = true
+                        self.updateIcon()
+                    } else {
+                        self.flash(symbol: "wifi.exclamationmark", tooltip: error.localizedDescription)
+                    }
                 }
             }
         }
@@ -191,16 +203,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func updateIcon() {
         guard let button = statusItem.button else { return }
         switch state {
+        case .idle where creditExhausted:
+            button.image = NSImage(systemSymbolName: "exclamationmark.triangle.fill", accessibilityDescription: "Guthaben aufgebraucht")
+            button.title = " Guthaben aufgebraucht"
+            button.contentTintColor = .systemRed
+            button.toolTip = "Anthropic-Guthaben aufgebraucht. Bitte in der Anthropic Console aufladen. Modus 1 (ohne Glättung) funktioniert weiterhin ohne Claude-Aufruf."
         case .idle:
             button.image = NSImage(systemSymbolName: "mic", accessibilityDescription: "Bereit")
+            button.title = ""
             button.contentTintColor = nil
             button.toolTip = "Diktier-Assistent – Control+1…4 zum Diktieren"
         case .recording:
             button.image = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "Aufnahme läuft")
+            button.title = ""
             button.contentTintColor = activeMode.accentColor
             button.toolTip = "Aufnahme läuft (\(activeMode.label)) – Esc zum Beenden"
         case .processing:
             button.image = NSImage(systemSymbolName: "hourglass", accessibilityDescription: "Verarbeite…")
+            button.title = ""
             button.contentTintColor = .systemOrange
             button.toolTip = "Text wird verarbeitet…"
         }
@@ -209,6 +229,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func flash(symbol: String, tooltip: String) {
         guard let button = statusItem.button else { return }
         button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: tooltip)
+        button.title = ""
         button.contentTintColor = .systemYellow
         button.toolTip = tooltip
 
