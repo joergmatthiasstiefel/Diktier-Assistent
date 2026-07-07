@@ -44,12 +44,17 @@ final class ClaudeClient {
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
+        // Das Transkript wird in Tags eingeschlossen statt als freie Chat-Nachricht
+        // geschickt, damit Claude es eindeutig als zu glättendes Rohmaterial erkennt
+        // und nicht als an ihn gerichtete Frage/Anweisung interpretiert.
+        let wrappedTranscript = "<diktat>\n\(transcript)\n</diktat>"
+
         let body: [String: Any] = [
             "model": model,
             "max_tokens": 1024,
             "system": systemPrompt,
             "messages": [
-                ["role": "user", "content": transcript]
+                ["role": "user", "content": wrappedTranscript]
             ]
         ]
 
