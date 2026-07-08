@@ -35,7 +35,7 @@ Danach `/Applications/Diktier-Assistent.app` starten.
 
 ## Hotkeys & Modi
 
-Control+1 bis Control+4 starten die Aufnahme im jeweiligen Modus (Toggle,
+Control+1 bis Control+5 starten die Aufnahme im jeweiligen Modus (Toggle,
 kein Halten nötig), Esc beendet sie:
 
 | Hotkey     | Modus                | Verhalten |
@@ -44,6 +44,7 @@ kein Halten nötig), Esc beendet sie:
 | Control+2  | Glättung               | Füllwörter/Versprecher entfernt, Grammatik korrigiert |
 | Control+3  | Freundlich             | wie Glättung, zusätzlich sehr freundlicher Ton, Schimpfwörter werden ausnahmslos ersetzt |
 | Control+4  | Freundlich + Emoji     | wie Modus 3, zusätzlich sparsam platzierte Emojis |
+| Control+5  | Förmlich/Business      | knapper, sehr professioneller Ton, konsequente Sie-Form, Fachbegriffe wo hilfreich, bewusst nicht "KI-glatt" formuliert |
 
 Während der Aufnahme zeigen Menüleisten-Icon (farbcodiert je Modus) und ein
 schwebendes Overlay am oberen Bildschirmrand an, dass aufgenommen wird und

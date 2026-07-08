@@ -51,8 +51,8 @@ struct SettingsView: View {
 
             Text("""
             Hotkey: Control+1 (ohne Glättung), Control+2 (Glättung), \
-            Control+3 (freundlich) oder Control+4 (freundlich + Emoji) startet \
-            die Aufnahme, Esc beendet sie.
+            Control+3 (freundlich), Control+4 (freundlich + Emoji) oder \
+            Control+5 (förmlich/Business) startet die Aufnahme, Esc beendet sie.
             """)
                 .font(.caption)
                 .foregroundStyle(.secondary)

@@ -1,7 +1,7 @@
 import AppKit
 import CoreGraphics
 
-/// Erkennt systemweit Control+1…4 (Aufnahme starten, je nach Modus) und Esc
+/// Erkennt systemweit Control+1…5 (Aufnahme starten, je nach Modus) und Esc
 /// (Aufnahme beenden). Anders als beim früheren fn+t-Push-to-Talk ist das
 /// hier ein Toggle: ein einzelner Tastendruck startet, Esc beendet - kein
 /// Halten nötig. `NSEvent`-Monitore können Events nur beobachten, nicht
@@ -27,15 +27,16 @@ final class HotkeyManager {
 
     /// kVK_Escape
     private let escapeKeyCode: Int64 = 53
-    /// kVK_ANSI_1 … kVK_ANSI_4, jeweils dem Aufnahmemodus zugeordnet.
+    /// kVK_ANSI_1 … kVK_ANSI_5, jeweils dem Aufnahmemodus zugeordnet.
     private let modeKeyCodes: [Int64: Int] = [
         18: 1,
         19: 2,
         20: 3,
         21: 4,
+        23: 5,
     ]
 
-    /// Aufnahmemodus (1-4), siehe `RecordingMode`.
+    /// Aufnahmemodus (1-5), siehe `RecordingMode`.
     var onStart: ((Int) -> Void)?
     var onStop: (() -> Void)?
 
