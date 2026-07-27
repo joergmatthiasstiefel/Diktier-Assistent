@@ -51,7 +51,7 @@ final class ClaudeClient {
 
         let body: [String: Any] = [
             "model": model,
-            "max_tokens": 1024,
+            "max_tokens": 8192,
             "system": systemPrompt,
             "messages": [
                 ["role": "user", "content": wrappedTranscript]

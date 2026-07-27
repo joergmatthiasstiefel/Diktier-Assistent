@@ -3,3 +3,6 @@
 .DS_Store
 *.xcuserstate
 DerivedData/
+
+# Überbleibsel aus der Zertifikatserstellung
+test.keychain-db

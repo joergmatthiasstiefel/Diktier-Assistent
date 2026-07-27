@@ -4,34 +4,58 @@ Menüleisten-App für macOS: Hotkey drücken, Deutsch sprechen, mit Esc beenden
 – der Text wird je nach gewähltem Modus unverändert oder per Claude API
 umformuliert und automatisch in die zuvor aktive App eingefügt.
 
-## Bauen & starten
+## Installation
 
-```bash
-./build.sh
-open "Diktier-Assistent.app"
-```
+Diese Schritte funktionieren auf jedem Mac, nicht nur dem, auf dem die App
+entstanden ist. Die Anleitung lässt sich auch direkt einer KI wie Claude Code
+geben, die einen dann Schritt für Schritt durchführt.
 
-Für dauerhaften Hintergrundbetrieb und den "Bei Anmeldung starten"-Schalter
-in den Einstellungen die App vorher nach `/Applications` kopieren:
+1. **Voraussetzung prüfen**: macOS 13 (Ventura) oder neuer, sowie die Xcode
+   Command Line Tools. Falls letztere noch fehlen:
+   ```bash
+   xcode-select --install
+   ```
+   Das öffnet einen eigenen Apple-Installationsdialog (einmalig, je nach
+   Internetverbindung 5–15 Minuten, muss manuell bestätigt werden).
 
-```bash
-cp -R "Diktier-Assistent.app" /Applications/
-```
+2. **Repo herunterladen**:
+   ```bash
+   git clone https://github.com/joergmatthiasstiefel/Diktier-Assistent.git
+   cd Diktier-Assistent
+   ```
 
-Danach `/Applications/Diktier-Assistent.app` starten.
+3. **Bauen und signieren**:
+   ```bash
+   ./build.sh
+   ```
+   Legt beim allerersten Mal automatisch ein eigenes, lokales
+   Signatur-Zertifikat an – dafür fragt macOS einmalig per Passwort oder
+   Touch ID nach. Das ist normal und sorgt dafür, dass App-Berechtigungen
+   auch nach künftigen Neubauten erhalten bleiben, statt nach jedem Build neu
+   erteilt werden zu müssen.
 
-## Erster Start
+4. **In den Programme-Ordner verschieben und starten** (nötig für
+   dauerhaften Hintergrundbetrieb und den "Bei Anmeldung starten"-Schalter):
+   ```bash
+   cp -R "Diktier-Assistent.app" /Applications/
+   open "/Applications/Diktier-Assistent.app"
+   ```
 
-1. API-Key: Menüleisten-Icon → Einstellungen… → Anthropic API-Key eintragen
-   → Speichern. Der Key landet in der Keychain, nicht in einer Datei.
-2. Berechtigungen: macOS fragt beim ersten Start nach Mikrofon und
-   Spracherkennung. Für Bedienungshilfen (zum Einfügen) und
+5. **Anthropic-API-Key besorgen und eintragen**: Auf
+   [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys)
+   einloggen (ggf. Account anlegen) → "Create Key" → Key kopieren. Dann in
+   der App: Menüleisten-Icon → Einstellungen… → Key einfügen → Speichern.
+   Der Key landet in der macOS-Keychain, nie in einer Datei.
+
+6. **Berechtigungen erteilen**: macOS fragt beim ersten Start nach Mikrofon
+   und Spracherkennung. Für Bedienungshilfen (zum Einfügen) und
    Eingabeüberwachung (für den globalen Hotkey) öffnet die App die
    passenden Systemeinstellungen-Seiten automatisch; Status ist in den
    Einstellungen der App sichtbar (grüner/roter Punkt).
-3. Deutsches Sprachpaket: Damit die Spracherkennung funktioniert, muss
-   unter Systemeinstellungen → Tastatur → Diktat "Deutsch" aktiviert bzw.
-   heruntergeladen sein.
+
+7. **Deutsches Sprachpaket aktivieren**: Damit die Spracherkennung
+   funktioniert, muss unter Systemeinstellungen → Tastatur → Diktat
+   "Deutsch" aktiviert bzw. heruntergeladen sein.
 
 ## Hotkeys & Modi
 
@@ -81,6 +105,10 @@ Moduswechsel ist erst nach Esc möglich.
 
 ## Nicht enthalten
 
-Keine Code-Signierung mit Developer-ID/Notarisierung – die App wird
-lokal ad-hoc signiert (`codesign --sign -`) und ist nur für den eigenen
-Rechner gedacht.
+Keine Code-Signierung mit Apple Developer-ID und keine Notarisierung – ein
+fertig gebautes `.app`-Bundle lässt sich deshalb nicht einfach als Download
+verteilen (macOS würde es beim ersten Start blockieren). Wer die App selbst
+aus dem Quellcode baut (siehe "Installation" oben), bekommt aber ein
+funktionsfähiges, lokal signiertes Bundle auf jedem Mac – das Blockieren
+betrifft nur Binärdateien, die aus dem Internet heruntergeladen wurden,
+nicht lokal kompilierte.
