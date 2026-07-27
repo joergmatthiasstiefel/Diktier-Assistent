@@ -5,6 +5,7 @@ struct SettingsView: View {
     @State private var apiKey: String = KeychainStore.shared.loadAPIKey() ?? ""
     @State private var savedMessage: String?
     @State private var startAtLogin: Bool = LoginItemManager.shared.isEnabled
+    @State private var liveTranscript: Bool = AppSettings.showsLiveTranscript
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -48,6 +49,21 @@ struct SettingsView: View {
                 .onChange(of: startAtLogin) { newValue in
                     LoginItemManager.shared.setEnabled(newValue)
                 }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Toggle("Gesprochenen Text live im Overlay mitlesen", isOn: $liveTranscript)
+                    .onChange(of: liveTranscript) { newValue in
+                        AppSettings.showsLiveTranscript = newValue
+                    }
+                Text("""
+                Zeigt während der Aufnahme das Roh-Transkript vor der Glättung. \
+                Der Text kann sich dabei rückwirkend ändern, weil die Erkennung \
+                bereits gesprochene Wörter mit mehr Kontext korrigiert.
+                """)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             Text("""
             Hotkey: Control+1 (ohne Glättung), Control+2 (Glättung), \

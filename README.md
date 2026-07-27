@@ -72,7 +72,13 @@ kein Halten nötig), Esc beendet sie:
 
 Während der Aufnahme zeigen Menüleisten-Icon (farbcodiert je Modus) und ein
 schwebendes Overlay am oberen Bildschirmrand an, dass aufgenommen wird und
-dass Esc sie beendet. Wird während einer laufenden Aufnahme eine andere
+dass Esc sie beendet. Das Overlay blendet zusätzlich das laufende
+Roh-Transkript ein, sodass man beim Sprechen mitlesen kann, ob die Erkennung
+einen richtig verstanden hat – noch vor der Glättung durch Claude. Angezeigt
+werden die letzten vier Zeilen, ältere Wörter laufen oben aus dem Text.
+Abschaltbar in den Einstellungen: Der Erkenner korrigiert bereits gesprochene
+Wörter nachträglich, sobald mehr Kontext vorliegt, wodurch der Text sichtbar
+springt. Wird während einer laufenden Aufnahme eine andere
 Modus-Kombination gedrückt, wird sie geschluckt, aber ignoriert – ein
 Moduswechsel ist erst nach Esc möglich.
 
@@ -86,7 +92,13 @@ Moduswechsel ist erst nach Esc möglich.
   `SFSpeechRecognizer` (`de-DE`). Bevorzugt On-Device, erlaubt macOS aber
   bei Bedarf den Ausweich auf die robustere serverbasierte Erkennung –
   rein On-Device lieferte bei schneller/undeutlicher Sprache öfters ein
-  leeres Transkript.
+  leeres Transkript. Die Zwischenergebnisse des Erkenners gehen per
+  `onPartialTranscript` an das Overlay (Live-Mitlesen).
+- `RecordingIndicatorWindow` misst die Texthöhe über `sizeThatFits` des
+  Labels, das den Text auch zeichnet. `intrinsicContentSize` meldet bei
+  umbrechenden Textfeldern eine zu kleine Höhe (76 statt 90 Punkte für fünf
+  Zeilen), wodurch die jeweils letzte Zeile unsichtbar unter dem
+  Fensterrand landete.
 - `ClaudeClient` schickt das Rohtranskript an die Anthropic Messages API,
   mit einem modusabhängigen System-Prompt und Modell (`RecordingMode.swift`):
   Glättung läuft auf `claude-haiku-4-5-20251001`, die kreativeren

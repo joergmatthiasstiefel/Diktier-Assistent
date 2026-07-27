@@ -30,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusItem()
         setupHotkey()
+        setupLiveTranscript()
         requestInitialPermissions()
     }
 
@@ -70,6 +71,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeyManager.start()
     }
 
+    private func setupLiveTranscript() {
+        transcriber.onPartialTranscript = { [weak self] text in
+            self?.recordingIndicator.update(transcript: text)
+        }
+    }
+
     private func requestInitialPermissions() {
         let manager = PermissionsManager.shared
         permissionsState.refresh()
@@ -102,7 +109,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         activeMode = mode
         state = .recording
-        recordingIndicator.show(mode: mode)
+        recordingIndicator.show(mode: mode, liveTranscript: AppSettings.showsLiveTranscript)
         do {
             try transcriber.startRecording()
         } catch {

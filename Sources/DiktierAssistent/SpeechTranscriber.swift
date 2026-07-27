@@ -21,6 +21,12 @@ final class SpeechTranscriber {
     private var latestTranscript = ""
     private var completionHandler: ((Result<String, TranscriberError>) -> Void)?
 
+    /// Wird während der Aufnahme bei jedem Zwischenergebnis auf dem
+    /// Hauptthread aufgerufen. Der Erkenner liefert die Teiltranskripte
+    /// ohnehin (`shouldReportPartialResults`), bis hierher wurden sie nur
+    /// intern gesammelt und nicht angezeigt.
+    var onPartialTranscript: ((String) -> Void)?
+
     func startRecording() throws {
         guard let recognizer, recognizer.isAvailable else {
             throw TranscriberError.recognizerUnavailable
@@ -55,6 +61,9 @@ final class SpeechTranscriber {
                 self.latestTranscript = result.bestTranscription.formattedString
                 if result.isFinal {
                     self.finish(.success(self.latestTranscript))
+                } else {
+                    let partial = self.latestTranscript
+                    DispatchQueue.main.async { self.onPartialTranscript?(partial) }
                 }
             }
             if let error {
