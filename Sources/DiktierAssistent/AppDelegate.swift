@@ -219,7 +219,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             button.image = NSImage(systemSymbolName: "mic", accessibilityDescription: "Bereit")
             button.title = ""
             button.contentTintColor = nil
-            button.toolTip = "Diktier-Assistent – Control+1…4 zum Diktieren"
+            button.toolTip = "Diktier-Assistent – Control+1…5 zum Diktieren"
         case .recording:
             button.image = NSImage(systemSymbolName: "mic.fill", accessibilityDescription: "Aufnahme läuft")
             button.title = ""
