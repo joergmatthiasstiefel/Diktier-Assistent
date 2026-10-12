@@ -1,6 +1,6 @@
 import AppKit
 
-/// Die vier per Control+1…4 auswählbaren Aufnahmemodi.
+/// Die fünf per Control+1…5 auswählbaren Aufnahmemodi.
 enum RecordingMode: Int {
     case raw = 1
     case smooth = 2

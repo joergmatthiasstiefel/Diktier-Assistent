@@ -84,7 +84,7 @@ Moduswechsel ist erst nach Esc möglich.
 
 ## Funktionsweise (kurz)
 
-- `HotkeyManager` erkennt Control+1…4 (Start) und Esc (Stopp) systemweit
+- `HotkeyManager` erkennt Control+1…5 (Start) und Esc (Stopp) systemweit
   über einen `CGEventTap` (daher die Berechtigung "Eingabeüberwachung").
   Esc wird nur geschluckt, solange eine Aufnahme läuft, damit das normale
   Esc-Verhalten in anderen Apps sonst unangetastet bleibt.
@@ -102,7 +102,8 @@ Moduswechsel ist erst nach Esc möglich.
 - `ClaudeClient` schickt das Rohtranskript an die Anthropic Messages API,
   mit einem modusabhängigen System-Prompt und Modell (`RecordingMode.swift`):
   Glättung läuft auf `claude-haiku-4-5-20251001`, die kreativeren
-  Freundlich-Modi auf `claude-sonnet-5`, um Grammatikfehler bei der
+  Modi (Freundlich, Freundlich + Emoji, Förmlich/Business) auf
+  `claude-sonnet-5`, um Grammatikfehler bei der
   stärkeren Umformulierung zu vermeiden.
 - `TextInserter` schreibt das Ergebnis in die Zwischenablage und simuliert
   `Cmd+V` über `CGEvent` (Bedienungshilfen-Zugriff nötig). Ohne diesen
