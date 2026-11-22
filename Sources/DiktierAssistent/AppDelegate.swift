@@ -38,6 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NotificationCenter.default.addObserver(forName: KeychainStore.apiKeyDidChange, object: nil, queue: .main) { [weak self] _ in
             if self?.persistentProblem == .invalidAPIKey { self?.persistentProblem = nil }
         }
+        setupEditMenu()
         setupStatusItem()
         setupHotkey()
         setupLiveTranscript()
@@ -45,6 +46,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     // MARK: - Setup
+
+    /// Menüleisten-Apps haben kein Hauptmenü. Ohne ein Bearbeiten-Menü
+    /// erreichen Befehlstaste+V/C/X/A die Textfelder nicht, man kann dann
+    /// etwa keinen API-Key aus der Zwischenablage einfügen. Das Menü bleibt
+    /// unsichtbar (.accessory), seine Tastenkürzel wirken trotzdem.
+    private func setupEditMenu() {
+        let mainMenu = NSMenu()
+        let editItem = NSMenuItem()
+        let editMenu = NSMenu(title: "Bearbeiten")
+        editMenu.addItem(withTitle: "Widerrufen", action: Selector(("undo:")), keyEquivalent: "z")
+        let redo = editMenu.addItem(withTitle: "Wiederholen", action: Selector(("redo:")), keyEquivalent: "z")
+        redo.keyEquivalentModifierMask = [.command, .shift]
+        editMenu.addItem(.separator())
+        editMenu.addItem(withTitle: "Ausschneiden", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        editMenu.addItem(withTitle: "Kopieren", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: "Einsetzen", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        editMenu.addItem(withTitle: "Alles auswählen", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        editItem.submenu = editMenu
+        mainMenu.addItem(editItem)
+        NSApp.mainMenu = mainMenu
+    }
 
     private func setupStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
