@@ -21,13 +21,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Modus der gerade laufenden bzw. zuletzt gestarteten Aufnahme.
     private var activeMode: RecordingMode = .smooth
 
-    /// Bleibt true, bis ein Claude-Aufruf wieder erfolgreich ist. Anders als
-    /// die übrigen Fehler (die nur 3 Sekunden aufblinken) ist das hier
-    /// dauerhaft sichtbar, weil man sonst leicht weiterdiktiert, ohne zu
-    /// merken, dass Modus 2-4 gar nicht mehr ankommen.
-    private var creditExhausted = false
+    /// Fehler, die jeden weiteren Claude-Aufruf ebenfalls scheitern lassen.
+    /// Anders als die übrigen Fehler (die nur 3 Sekunden aufblinken) bleiben
+    /// sie in der Menüleiste stehen, bis ein Claude-Aufruf wieder gelingt
+    /// (beim Schlüssel auch: bis ein neuer gespeichert wird). Sonst
+    /// diktiert man weiter, ohne zu merken, dass Modus 2-5 nichts liefern.
+    private enum PersistentProblem {
+        case creditExhausted, invalidAPIKey
+    }
+
+    private var persistentProblem: PersistentProblem? {
+        didSet { updateIcon() }
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        NotificationCenter.default.addObserver(forName: KeychainStore.apiKeyDidChange, object: nil, queue: .main) { [weak self] _ in
+            if self?.persistentProblem == .invalidAPIKey { self?.persistentProblem = nil }
+        }
         setupStatusItem()
         setupHotkey()
         setupLiveTranscript()
@@ -163,7 +173,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.state = .idle
                 switch result {
                 case .success(let cleanedText):
-                    self.creditExhausted = false
+                    self.persistentProblem = nil
                     self.deliver(cleanedText)
                 case .failure(.emptyTranscript):
                     DebugLog.write("Leeres Transkript beim Claude-Aufruf in Modus '\(mode.label)'.")
@@ -171,8 +181,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 case .failure(let error):
                     DebugLog.write("Claude-Fehler in Modus '\(mode.label)': \(error.localizedDescription)")
                     if error.localizedDescription.lowercased().contains("credit balance") {
-                        self.creditExhausted = true
-                        self.updateIcon()
+                        self.persistentProblem = .creditExhausted
+                    } else if case .badResponse(let code, _) = error, code == 401 {
+                        // 401 = Schlüssel gelöscht, gesperrt oder falsch abgetippt.
+                        self.persistentProblem = .invalidAPIKey
                     } else {
                         self.flash(symbol: "wifi.exclamationmark", tooltip: error.localizedDescription)
                     }
@@ -209,12 +221,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func updateIcon() {
         guard let button = statusItem.button else { return }
+        // Mit Text braucht das Symbol Platz, sonst wird der Hinweis abgeschnitten.
+        statusItem.length = (state == .idle && persistentProblem != nil)
+            ? NSStatusItem.variableLength : NSStatusItem.squareLength
         switch state {
-        case .idle where creditExhausted:
+        case .idle where persistentProblem == .creditExhausted:
             button.image = NSImage(systemSymbolName: "exclamationmark.triangle.fill", accessibilityDescription: "Guthaben aufgebraucht")
             button.title = " Guthaben aufgebraucht"
             button.contentTintColor = .systemRed
             button.toolTip = "Anthropic-Guthaben aufgebraucht. Bitte in der Anthropic Console aufladen. Modus 1 (ohne Glättung) funktioniert weiterhin ohne Claude-Aufruf."
+        case .idle where persistentProblem == .invalidAPIKey:
+            button.image = NSImage(systemSymbolName: "key.slash", accessibilityDescription: "API-Key ungültig")
+            button.title = " API-Key ungültig"
+            button.contentTintColor = .systemRed
+            button.toolTip = "Anthropic lehnt den hinterlegten API-Key ab (gelöscht oder gesperrt). Bitte unter console.anthropic.com einen neuen anlegen und in den Einstellungen speichern. Modus 1 (ohne Glättung) funktioniert weiterhin."
         case .idle:
             button.image = NSImage(systemSymbolName: "mic", accessibilityDescription: "Bereit")
             button.title = ""

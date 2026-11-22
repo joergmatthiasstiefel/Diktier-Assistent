@@ -9,7 +9,12 @@ final class KeychainStore {
     private let service = "com.stiefel.diktierassistent.anthropic-api-key"
     private let account = "anthropic-api-key"
 
+    /// Wird nach jedem Speichern gesendet, damit die App eine Warnung
+    /// „Schlüssel ungültig“ sofort zurücknehmen kann.
+    static let apiKeyDidChange = Notification.Name("DiktierAssistentAPIKeyDidChange")
+
     func save(apiKey: String) {
+        defer { NotificationCenter.default.post(name: Self.apiKeyDidChange, object: nil) }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
