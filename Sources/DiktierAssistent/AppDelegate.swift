@@ -1,6 +1,6 @@
 import AppKit
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private let hotkeyManager = HotkeyManager()
     private let transcriber = SpeechTranscriber()
@@ -20,6 +20,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Modus der gerade laufenden bzw. zuletzt gestarteten Aufnahme.
     private var activeMode: RecordingMode = .smooth
+
+    /// Text links und rechts vom Cursor im Zielfeld, gelesen beim Start der
+    /// Aufnahme. nil, wenn die App das Feld nicht lesen kann; dann wird der
+    /// Text eingefügt wie bisher.
+    private var activeField: FocusedField?
+    /// Zählt die Aufnahmen hoch, damit ein spät eintreffendes Leseergebnis
+    /// einer älteren Aufnahme nicht die neue überschreibt.
+    private var recordingNumber = 0
 
     /// Fehler, die jeden weiteren Claude-Aufruf ebenfalls scheitern lassen.
     /// Anders als die übrigen Fehler (die nur 3 Sekunden aufblinken) bleiben
@@ -73,10 +81,65 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updateIcon()
 
         let menu = NSMenu()
+        menu.delegate = self
+        statusItem.menu = menu
+        rebuildMenu(menu)
+    }
+
+    /// Das Menü wird bei jedem Öffnen neu gebaut, damit der Verlauf aktuell ist.
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        guard menu === statusItem.menu else { return }
+        rebuildMenu(menu)
+    }
+
+    private func rebuildMenu(_ menu: NSMenu) {
+        menu.removeAllItems()
+
         let headerItem = NSMenuItem(title: "Diktier-Assistent", action: nil, keyEquivalent: "")
         headerItem.isEnabled = false
         menu.addItem(headerItem)
         menu.addItem(.separator())
+
+        let entries = Verlauf.eintraege
+        if let last = entries.first {
+            let copyLast = NSMenuItem(title: "Letzten Text kopieren", action: #selector(copyFromMenu(_:)), keyEquivalent: "")
+            copyLast.target = self
+            copyLast.representedObject = last.ergebnis
+            copyLast.toolTip = last.ergebnis
+            menu.addItem(copyLast)
+
+            if last.wortgenau != last.ergebnis {
+                let copyRaw = NSMenuItem(title: "Wortgenau kopieren (statt \(last.modus))", action: #selector(copyFromMenu(_:)), keyEquivalent: "")
+                copyRaw.target = self
+                copyRaw.representedObject = last.wortgenau
+                copyRaw.toolTip = last.wortgenau
+                menu.addItem(copyRaw)
+            }
+
+            let historyItem = NSMenuItem(title: "Verlauf", action: nil, keyEquivalent: "")
+            let historyMenu = NSMenu(title: "Verlauf")
+            let timeFormat = DateFormatter()
+            timeFormat.dateFormat = "dd.MM. HH:mm"
+            for entry in entries {
+                let oneLine = entry.ergebnis.replacingOccurrences(of: "\n", with: " ")
+                let preview = oneLine.count > 50 ? String(oneLine.prefix(50)) + "…" : oneLine
+                let item = NSMenuItem(
+                    title: "\(timeFormat.string(from: entry.zeit)) · \(entry.modus): \(preview)",
+                    action: #selector(copyFromMenu(_:)), keyEquivalent: ""
+                )
+                item.target = self
+                item.representedObject = entry.ergebnis
+                item.toolTip = entry.ergebnis
+                historyMenu.addItem(item)
+            }
+            historyMenu.addItem(.separator())
+            let clearItem = NSMenuItem(title: "Verlauf löschen", action: #selector(clearHistory), keyEquivalent: "")
+            clearItem.target = self
+            historyMenu.addItem(clearItem)
+            historyItem.submenu = historyMenu
+            menu.addItem(historyItem)
+            menu.addItem(.separator())
+        }
 
         let settingsItem = NSMenuItem(title: "Einstellungen…", action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
@@ -87,8 +150,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let quitItem = NSMenuItem(title: "Beenden", action: #selector(quit), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
-
-        statusItem.menu = menu
     }
 
     private func setupHotkey() {
@@ -140,6 +201,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         activeMode = mode
+        readActiveField()
         state = .recording
         recordingIndicator.show(mode: mode, liveTranscript: AppSettings.showsLiveTranscript)
         do {
@@ -169,34 +231,58 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private func readActiveField() {
+        recordingNumber += 1
+        let number = recordingNumber
+        activeField = nil
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let field = FocusedFieldReader.frontmostField()
+            DispatchQueue.main.async {
+                guard let self, self.recordingNumber == number else { return }
+                self.activeField = field
+            }
+        }
+    }
+
     private func cleanUpAndInsert(_ transcript: String, mode: RecordingMode) {
-        guard let systemPrompt = mode.claudeSystemPrompt else {
+        let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Feste Ersetzungen gelten in jedem Modus, auch ohne Glättung.
+        let wordForWord = Woerterbuch.applyReplacements(to: trimmed)
+
+        guard let systemPrompt = mode.systemPrompt(protectedTerms: Woerterbuch.protectedTerms) else {
             state = .idle
-            let trimmed = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else {
+            guard !wordForWord.isEmpty else {
                 flash(symbol: "waveform.slash", tooltip: "Keine verständliche Sprache erkannt.")
                 return
             }
-            deliver(trimmed)
+            Verlauf.hinzufuegen(modus: mode.label, wortgenau: wordForWord, ergebnis: wordForWord)
+            deliver(wordForWord)
             return
         }
 
         guard let apiKey = KeychainStore.shared.loadAPIKey(), !apiKey.isEmpty else {
             DebugLog.write("Kein API-Key im Schlüsselbund hinterlegt (Modus '\(mode.label)').")
             state = .idle
-            flash(symbol: "key.slash", tooltip: "Kein API-Key hinterlegt. Bitte in den Einstellungen eintragen.")
+            keepWordForWord(wordForWord, reason: "Kein API-Key hinterlegt.", symbol: "key.slash")
             openSettings()
             return
         }
 
-        claudeClient.cleanUp(transcript: transcript, apiKey: apiKey, systemPrompt: systemPrompt, model: mode.claudeModel) { [weak self] result in
+        claudeClient.cleanUp(transcript: wordForWord, apiKey: apiKey, systemPrompt: systemPrompt, model: mode.claudeModel) { [weak self] result in
             guard let self else { return }
             DispatchQueue.main.async {
                 self.state = .idle
                 switch result {
                 case .success(let cleanedText):
                     self.persistentProblem = nil
-                    self.deliver(cleanedText)
+                    switch RewriteGuard.checked(cleanedText, source: wordForWord) {
+                    case .success(let text):
+                        Verlauf.hinzufuegen(modus: mode.label, wortgenau: wordForWord, ergebnis: text)
+                        self.deliver(text)
+                    case .failure(let problem):
+                        DebugLog.write("Prüfung in Modus '\(mode.label)' verworfen: \(problem.message)")
+                        self.keepWordForWord(wordForWord, reason: problem.message, symbol: "exclamationmark.bubble")
+                    }
                 case .failure(.emptyTranscript):
                     DebugLog.write("Leeres Transkript beim Claude-Aufruf in Modus '\(mode.label)'.")
                     self.flash(symbol: "waveform.slash", tooltip: "Keine verständliche Sprache erkannt.")
@@ -204,23 +290,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     DebugLog.write("Claude-Fehler in Modus '\(mode.label)': \(error.localizedDescription)")
                     if error.localizedDescription.lowercased().contains("credit balance") {
                         self.persistentProblem = .creditExhausted
+                        self.keepWordForWord(wordForWord, reason: nil, symbol: nil)
                     } else if case .badResponse(let code, _) = error, code == 401 {
                         // 401 = Schlüssel gelöscht, gesperrt oder falsch abgetippt.
                         self.persistentProblem = .invalidAPIKey
+                        self.keepWordForWord(wordForWord, reason: nil, symbol: nil)
                     } else {
-                        self.flash(symbol: "wifi.exclamationmark", tooltip: error.localizedDescription)
+                        self.keepWordForWord(wordForWord, reason: error.localizedDescription, symbol: "wifi.exclamationmark")
                     }
                 }
             }
         }
     }
 
-    private func deliver(_ text: String) {
+    /// Wenn der Claude-Schritt scheitert, geht das Diktat nicht verloren: Der
+    /// wortgenaue Text kommt in die Zwischenablage und in den Verlauf.
+    /// Eingefügt wird er bewusst nicht, man hatte ja einen anderen Modus
+    /// gewählt. Ohne `reason` zeigt die Menüleiste schon einen dauerhaften Hinweis.
+    private func keepWordForWord(_ text: String, reason: String?, symbol: String?) {
+        guard !text.isEmpty else { return }
+        textInserter.copy(text)
+        Verlauf.hinzufuegen(modus: "Wortgenau", wortgenau: text, ergebnis: text)
+        if let reason, let symbol {
+            flash(symbol: symbol, tooltip: reason + " Der wortgenaue Text liegt in der Zwischenablage.")
+        }
+    }
+
+    private func deliver(_ dictated: String) {
+        // Leerzeichen, Groß- und Kleinschreibung und Schlusspunkt passend zum
+        // Text am Cursor, nur an den Rändern des Diktats.
+        let text = activeField.map { InsertionFitter.fit(dictated, before: $0.textBefore, after: $0.textAfter) } ?? dictated
         if PermissionsManager.shared.isAccessibilityTrusted(prompt: false) {
             textInserter.insert(text)
         } else {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(text, forType: .string)
+            textInserter.copy(text)
             flash(symbol: "exclamationmark.triangle", tooltip: "Bedienungshilfen-Zugriff fehlt: Text wurde nur in die Zwischenablage kopiert.")
         }
     }
@@ -251,12 +354,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             button.image = NSImage(systemSymbolName: "exclamationmark.triangle.fill", accessibilityDescription: "Guthaben aufgebraucht")
             button.title = " Guthaben aufgebraucht"
             button.contentTintColor = .systemRed
-            button.toolTip = "Anthropic-Guthaben aufgebraucht. Bitte in der Anthropic Console aufladen. Modus 1 (ohne Glättung) funktioniert weiterhin ohne Claude-Aufruf."
+            button.toolTip = "Anthropic-Guthaben aufgebraucht. Bitte in der Anthropic Console aufladen. Modus 1 (ohne Glättung) funktioniert weiterhin ohne Claude-Aufruf. Bei den anderen Modi liegt der wortgenaue Text jeweils in der Zwischenablage."
         case .idle where persistentProblem == .invalidAPIKey:
             button.image = NSImage(systemSymbolName: "key.slash", accessibilityDescription: "API-Key ungültig")
             button.title = " API-Key ungültig"
             button.contentTintColor = .systemRed
-            button.toolTip = "Anthropic lehnt den hinterlegten API-Key ab (gelöscht oder gesperrt). Bitte unter console.anthropic.com einen neuen anlegen und in den Einstellungen speichern. Modus 1 (ohne Glättung) funktioniert weiterhin."
+            button.toolTip = "Anthropic lehnt den hinterlegten API-Key ab (gelöscht oder gesperrt). Bitte unter console.anthropic.com einen neuen anlegen und in den Einstellungen speichern. Modus 1 (ohne Glättung) funktioniert weiterhin. Bei den anderen Modi liegt der wortgenaue Text jeweils in der Zwischenablage."
         case .idle:
             button.image = NSImage(systemSymbolName: "mic", accessibilityDescription: "Bereit")
             button.title = ""
@@ -295,6 +398,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             settingsWindowController = SettingsWindowController(permissionsState: permissionsState)
         }
         settingsWindowController?.show()
+    }
+
+    @objc private func copyFromMenu(_ sender: NSMenuItem) {
+        guard let text = sender.representedObject as? String else { return }
+        textInserter.copy(text)
+    }
+
+    @objc private func clearHistory() {
+        Verlauf.loeschen()
     }
 
     @objc private func quit() {

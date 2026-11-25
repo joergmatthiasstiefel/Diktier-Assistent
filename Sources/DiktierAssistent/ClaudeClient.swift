@@ -47,7 +47,7 @@ final class ClaudeClient {
         // Das Transkript wird in Tags eingeschlossen statt als freie Chat-Nachricht
         // geschickt, damit Claude es eindeutig als zu glättendes Rohmaterial erkennt
         // und nicht als an ihn gerichtete Frage/Anweisung interpretiert.
-        let wrappedTranscript = "<diktat>\n\(transcript)\n</diktat>"
+        let wrappedTranscript = "<diktat>\n\(RewriteGuard.withoutTags(transcript))\n</diktat>"
 
         let body: [String: Any] = [
             "model": model,

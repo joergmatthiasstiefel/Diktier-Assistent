@@ -6,8 +6,67 @@ struct SettingsView: View {
     @State private var savedMessage: String?
     @State private var startAtLogin: Bool = LoginItemManager.shared.isEnabled
     @State private var liveTranscript: Bool = AppSettings.showsLiveTranscript
+    @State private var termsText: String = Woerterbuch.termsText
+    @State private var replacementsText: String = Woerterbuch.replacementsText
+    @State private var dictionaryMessage: String?
 
     var body: some View {
+        TabView {
+            general
+                .tabItem { Text("Allgemein") }
+            dictionary
+                .tabItem { Text("Wörterbuch") }
+        }
+        .padding(12)
+        .frame(width: 440)
+        .onAppear { permissionsState.refresh() }
+    }
+
+    private var dictionary: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Begriffe")
+                .font(.subheadline)
+            Text("Namen und Fachbegriffe, die genau so geschrieben werden sollen, je einer pro Zeile. Die Modi 2 bis 5 übernehmen diese Schreibweise.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            TextEditor(text: $termsText)
+                .font(.body)
+                .frame(height: 90)
+                .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.secondary.opacity(0.4)))
+
+            Text("Feste Ersetzungen")
+                .font(.subheadline)
+                .padding(.top, 6)
+            Text("Für Wörter, die die Spracherkennung immer falsch schreibt. Je eine Regel pro Zeile, links das Gesprochene, rechts die Schreibweise, dazwischen ein Gleichheitszeichen, etwa „n acht n = n8n“. Gilt in allen Modi, auch ohne Glättung.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            TextEditor(text: $replacementsText)
+                .font(.body)
+                .frame(height: 90)
+                .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.secondary.opacity(0.4)))
+
+            HStack {
+                Button("Speichern") {
+                    Woerterbuch.termsText = termsText
+                    Woerterbuch.replacementsText = replacementsText
+                    let terms = Woerterbuch.terms.count
+                    let rules = Woerterbuch.replacements.count
+                    dictionaryMessage = "Gespeichert: \(terms) \(terms == 1 ? "Begriff" : "Begriffe"), \(rules) \(rules == 1 ? "Ersetzung" : "Ersetzungen")."
+                }
+                if let dictionaryMessage {
+                    Text(dictionaryMessage)
+                        .foregroundStyle(.secondary)
+                        .font(.caption)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(16)
+    }
+
+    private var general: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Diktier-Assistent – Einstellungen")
                 .font(.headline)
@@ -76,14 +135,12 @@ struct SettingsView: View {
 
             HStack {
                 Spacer()
-                Text("v1.1")
+                Text("v1.2")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
         }
-        .padding(20)
-        .frame(width: 400)
-        .onAppear { permissionsState.refresh() }
+        .padding(16)
     }
 
     @ViewBuilder

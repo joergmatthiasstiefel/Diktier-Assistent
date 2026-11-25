@@ -82,6 +82,30 @@ springt. Wird während einer laufenden Aufnahme eine andere
 Modus-Kombination gedrückt, wird sie geschluckt, aber ignoriert – ein
 Moduswechsel ist erst nach Esc möglich.
 
+## Seit Version 1.2
+
+- **Nichts geht verloren.** Scheitert der Claude-Schritt (kein Netz, kein
+  Guthaben, Schlüssel ungültig), liegt der wortgenaue Text in der
+  Zwischenablage, und das Symbol in der Menüleiste sagt, warum. Dasselbe gilt,
+  wenn Claude auf das Diktat antwortet, statt es zu bearbeiten.
+- **Verlauf im Menü.** „Letzten Text kopieren“, „Wortgenau kopieren“ (wenn ein
+  Modus umformuliert hat) und die letzten 20 Diktate. Der Verlauf liegt nur auf
+  diesem Mac.
+- **Die Zwischenablage bleibt erhalten.** Was vorher kopiert war, kommt nach
+  dem Einfügen zurück.
+- **Passt sich an den Cursor an.** Mitten im Satz kommt das Diktat klein und
+  ohne Schlusspunkt, nach einem Wort mit Leerzeichen davor. Passwortfelder
+  werden nie gelesen.
+- **Wörterbuch** (Einstellungen → Wörterbuch): Begriffe, die Claude genau so
+  schreibt, und feste Ersetzungen wie „n acht n = n8n“, die in jedem Modus
+  gelten.
+- **Sprechregeln:** Selbstkorrekturen („Mittwoch, nein, Donnerstag“) werden
+  aufgelöst, die Anrede bleibt wie gesprochen (außer im Business-Modus).
+
+Die Ideen für Antwortprüfung, Sprechregeln und Cursoranpassung stammen aus
+[Blitztext](https://github.com/cmagnussen/blitztext-app) (MIT-Lizenz);
+`InsertionFitter.swift` ist von dort übernommen.
+
 ## Funktionsweise (kurz)
 
 - `HotkeyManager` erkennt Control+1…5 (Start) und Esc (Stopp) systemweit
@@ -101,12 +125,15 @@ Moduswechsel ist erst nach Esc möglich.
   Fensterrand landete.
 - `ClaudeClient` schickt das Rohtranskript an die Anthropic Messages API,
   mit einem modusabhängigen System-Prompt und Modell (`RecordingMode.swift`):
-  Glättung läuft auf `claude-haiku-4-5-20251001`, die kreativeren
+  Glättung läuft auf `claude-haiku-5-5`, die kreativeren
   Modi (Freundlich, Freundlich + Emoji, Förmlich/Business) auf
-  `claude-sonnet-5`, um Grammatikfehler bei der
-  stärkeren Umformulierung zu vermeiden.
-- `TextInserter` schreibt das Ergebnis in die Zwischenablage und simuliert
-  `Cmd+V` über `CGEvent` (Bedienungshilfen-Zugriff nötig). Ohne diesen
+  `claude-sonnet-5-5`, um Grammatikfehler bei der
+  stärkeren Umformulierung zu vermeiden. `RewriteGuard` prüft die Antwort.
+- `FocusedFieldReader` liest beim Start der Aufnahme den Text um den Cursor,
+  `InsertionFitter` passt die Ränder des Diktats daran an.
+- `TextInserter` schreibt das Ergebnis in die Zwischenablage, simuliert
+  `Cmd+V` über `CGEvent` (Bedienungshilfen-Zugriff nötig) und legt nach
+  1,5 Sekunden den vorherigen Inhalt zurück, sofern niemand anderes kopiert hat. Ohne diesen
   Zugriff bleibt der Text nur in der Zwischenablage, die App weist per
   Icon-Hinweis darauf hin.
 - Fehlerfälle (keine Internetverbindung, fehlende Berechtigung, leere/
