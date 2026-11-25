@@ -84,6 +84,8 @@ Moduswechsel ist erst nach Esc möglich.
 
 ## Seit Version 1.2
 
+- **Kurzanleitung in der App.** Erscheint beim ersten Start und steht danach im
+  Menü hinter dem Mikrofon-Symbol unter „Kurzanleitung…“.
 - **Nichts geht verloren.** Scheitert der Claude-Schritt (kein Netz, kein
   Guthaben, Schlüssel ungültig), liegt der wortgenaue Text in der
   Zwischenablage, und das Symbol in der Menüleiste sagt, warum. Dasselbe gilt,

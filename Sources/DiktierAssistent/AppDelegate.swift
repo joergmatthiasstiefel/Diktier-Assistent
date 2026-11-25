@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let permissionsState = PermissionsState()
     private let recordingIndicator = RecordingIndicatorWindow()
     private var settingsWindowController: SettingsWindowController?
+    private var anleitungWindowController: AnleitungWindowController?
 
     private enum State {
         case idle, recording, processing
@@ -51,6 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         setupHotkey()
         setupLiveTranscript()
         requestInitialPermissions()
+        if !AnleitungWindowController.wasShown { openAnleitung() }
     }
 
     // MARK: - Setup
@@ -140,6 +142,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             menu.addItem(historyItem)
             menu.addItem(.separator())
         }
+
+        let anleitungItem = NSMenuItem(title: "Kurzanleitung…", action: #selector(openAnleitung), keyEquivalent: "")
+        anleitungItem.target = self
+        menu.addItem(anleitungItem)
 
         let settingsItem = NSMenuItem(title: "Einstellungen…", action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
@@ -398,6 +404,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             settingsWindowController = SettingsWindowController(permissionsState: permissionsState)
         }
         settingsWindowController?.show()
+    }
+
+    @objc private func openAnleitung() {
+        if anleitungWindowController == nil {
+            anleitungWindowController = AnleitungWindowController()
+        }
+        anleitungWindowController?.show()
     }
 
     @objc private func copyFromMenu(_ sender: NSMenuItem) {

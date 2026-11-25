@@ -15,6 +15,11 @@ enum ClaudeClientError: Error, LocalizedError {
             return "Keine verständliche Sprache erkannt."
         case .network(let error):
             return "Keine Verbindung zur Claude API: \(error.localizedDescription)"
+        case .badResponse(let code, let body) where code == 404 || body.contains("not_found_error"):
+            // Anthropic meldet ein abgeschaltetes Modell mit 404. Dann hilft
+            // nur ein neuer Modellname in RecordingMode.swift; die
+            // Modell-Wache auf dem Server soll das vorher melden.
+            return "Das eingestellte Claude-Modell gibt es nicht mehr. Die App braucht neue Modellnamen. Code \(code): \(body.prefix(120))"
         case .badResponse(let code, let body):
             return "Claude API Fehler (\(code)): \(body.prefix(200))"
         case .emptyContent:
